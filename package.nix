@@ -31,6 +31,10 @@ args@{
   withGui ? true,
   withTools ? true,
   waylandSupport ? stdenv.hostPlatform.isLinux,
+  # Opt-in upstream: zone events from every thread then share one lock.
+  fiberSupport ? false,
+  # Record only while a profiler is connected, instead of buffering from launch.
+  onDemand ? false,
   enableShared ? !stdenv.hostPlatform.isStatic,
   enableLto ? true,
 }:
@@ -177,6 +181,8 @@ stdenv.mkDerivation (finalAttrs: {
     (lib.cmakeBool "TRACY_STATIC" (!enableShared))
     # TRACY_LTO creates an OBJECT library, which is unsuitable for an installed client.
     (lib.cmakeBool "TRACY_LTO" false)
+    (lib.cmakeBool "TRACY_FIBERS" fiberSupport)
+    (lib.cmakeBool "TRACY_ON_DEMAND" onDemand)
     (lib.cmakeBool "CMAKE_DISABLE_FIND_PACKAGE_rocprofiler-sdk" true)
   ]
   ++ lib.optionals withServer [

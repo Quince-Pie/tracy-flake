@@ -7,8 +7,14 @@
 
 int main(void)
 {
+#ifdef TRACY_FIBERS
+    TracyCFiberEnter("nix-c-fiber");
+#endif
     TracyCZoneN(zone, "nix-c-consumer", true);
     TracyCZoneEnd(zone);
+#ifdef TRACY_FIBERS
+    TracyCFiberLeave;
+#endif
     TracyCFrameMark;
     return 0;
 }

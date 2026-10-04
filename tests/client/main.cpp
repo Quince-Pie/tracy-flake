@@ -29,6 +29,9 @@ int main(int argc, char**)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
+#ifdef TRACY_FIBERS
+    TracyFiberEnter("nix-fiber");
+#endif
     for (int i = 0; i < 8; ++i)
     {
         {
@@ -43,5 +46,8 @@ int main(int argc, char**)
         FrameMark;
     }
     TracyMessageL("nix-capture-complete");
+#ifdef TRACY_FIBERS
+    TracyFiberLeave;
+#endif
     return 0;
 }
