@@ -1,0 +1,53 @@
+Install a tracy.pc matching the exported CMake target.
+Upstream generates one only from its Meson build.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -282,6 +282,34 @@
+ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/TracyConfigVersion.cmake"
+         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+ 
++# Keep pkg-config consumers consistent with the installed CMake target.
++get_target_property(tracy_pc_definitions TracyClient INTERFACE_COMPILE_DEFINITIONS)
++set(tracy_pc_cflags "")
++if(tracy_pc_definitions)
++    foreach(definition IN LISTS tracy_pc_definitions)
++        string(APPEND tracy_pc_cflags " -D${definition}")
++    endforeach()
++endif()
++set(tracy_pc_libs_private "${CMAKE_THREAD_LIBS_INIT}")
++foreach(library IN LISTS CMAKE_DL_LIBS)
++    string(APPEND tracy_pc_libs_private " -l${library}")
++endforeach()
++# Also allow C programs to link the static C++ client with their C linker.
++foreach(library IN ITEMS stdc++ c++)
++    if(library IN_LIST CMAKE_CXX_IMPLICIT_LINK_LIBRARIES)
++        string(APPEND tracy_pc_libs_private " -l${library}")
++    endif()
++endforeach()
++set(tracy_pc_requires_private "")
++if(TRACY_LIBUNWIND_BACKTRACE)
++    string(APPEND tracy_pc_requires_private " libunwind")
++endif()
++if(TRACY_DEBUGINFOD)
++    string(APPEND tracy_pc_requires_private " libdebuginfod")
++endif()
++configure_file(cmake/tracy.pc.in tracy.pc @ONLY)
++install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tracy.pc" DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
++
+ option(TRACY_CLIENT_PYTHON "Whether to build Tracy python client library" OFF)
+ 
+ if(TRACY_CLIENT_PYTHON)
+--- /dev/null
++++ b/cmake/tracy.pc.in
+@@ -0,0 +1,10 @@
++libdir=@CMAKE_INSTALL_FULL_LIBDIR@
++includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
++
++Name: Tracy
++Description: Tracy profiling client
++Version: @PROJECT_VERSION@
++Libs: -L${libdir} -lTracyClient
++Libs.private: @tracy_pc_libs_private@
++Requires.private: @tracy_pc_requires_private@
++Cflags: -I${includedir}/tracy@tracy_pc_cflags@

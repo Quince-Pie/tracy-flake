@@ -1,0 +1,81 @@
+Use the system zstd, nlohmann_json and tidy instead of downloading them,
+and glob only the DTL headers instead of every header in the source tree.
+
+--- a/cmake/vendor.cmake
++++ b/cmake/vendor.cmake
+@@ -1,6 +1,8 @@
+ # Vendor Specific CMake
+ # The Tracy project keeps most vendor source locally
+ 
++include_guard(GLOBAL)
++
+ set (ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/../")
+ 
+ # Dependencies are taken from the system first and if not found, they are pulled with CPM and built from source
+@@ -69,20 +71,13 @@
+ 
+ # Zstd
+ 
+-CPMAddPackage(
+-    NAME zstd
+-    GITHUB_REPOSITORY facebook/zstd
+-    GIT_TAG v1.5.7
+-    OPTIONS
+-        "ZSTD_BUILD_SHARED OFF"
+-    EXCLUDE_FROM_ALL TRUE
+-    SOURCE_SUBDIR build/cmake
+-)
++find_package(zstd 1.5.7 REQUIRED CONFIG)
++add_library(libzstd ALIAS zstd::libzstd)
+ 
+ # Diff Template Library
+ 
+ set(DTL_DIR "${ROOT_DIR}/dtl")
+-file(GLOB_RECURSE DTL_HEADERS CONFIGURE_DEPENDS RELATIVE ${DTL_DIR} "*.hpp")
++file(GLOB_RECURSE DTL_HEADERS CONFIGURE_DEPENDS "${DTL_DIR}/*.hpp")
+ add_library(TracyDtl INTERFACE)
+ target_sources(TracyDtl INTERFACE ${DTL_HEADERS})
+ target_include_directories(TracyDtl INTERFACE ${DTL_DIR})
+@@ -109,12 +104,7 @@
+ 
+ # json
+ 
+-CPMAddPackage(
+-    NAME json
+-    GITHUB_REPOSITORY nlohmann/json
+-    GIT_TAG v3.12.0
+-    EXCLUDE_FROM_ALL TRUE
+-)
++find_package(nlohmann_json 3.12 REQUIRED CONFIG)
+ 
+ if(VENDOR_GUI)
+ 
+@@ -271,14 +261,8 @@
+ 
+         # tidy
+ 
+-        CPMAddPackage(
+-            NAME tidy
+-            GITHUB_REPOSITORY htacg/tidy-html5
+-            GIT_TAG 5.8.0
+-            PATCHES
+-                "${CMAKE_CURRENT_LIST_DIR}/tidy-cmake.patch"
+-            EXCLUDE_FROM_ALL TRUE
+-        )
++        pkg_check_modules(TIDY REQUIRED IMPORTED_TARGET tidy>=5.8)
++        add_library(tidy-static ALIAS PkgConfig::TIDY)
+ 
+         # usearch
+ 
+--- a/profiler/CMakeLists.txt
++++ b/profiler/CMakeLists.txt
+@@ -304,9 +304,6 @@
+     md4c
+ )
+ target_include_directories(${PROJECT_NAME} PRIVATE
+-    ${tidy_SOURCE_DIR}/include
+-)
+-target_include_directories(${PROJECT_NAME} PRIVATE
+     ${md4c_SOURCE_DIR}/src
+ )
+ 

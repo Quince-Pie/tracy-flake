@@ -1,0 +1,7 @@
+[
+  { "name": "outer", "ph": "B", "pid": 1, "tid": 7, "ts": 0 },
+  { "name": "inner", "ph": "X", "pid": 1, "tid": 7, "ts": 250, "dur": 500 },
+  { "ph": "E", "pid": 1, "tid": 7, "ts": 1000 },
+  { "name": "pulse", "ph": "X", "pid": 1, "tid": 7, "ts": 2000, "dur": 250 },
+  { "name": "test-message", "ph": "i", "pid": 1, "tid": 7, "ts": 3000 }
+]

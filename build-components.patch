@@ -1,0 +1,171 @@
+Build the profiler and tools in the top-level project, so the client library,
+vendored dependencies and server library are configured and compiled once.
+Release archives have no .git directory, so take the version reference as an option.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -323,3 +323,23 @@
+ if(PROJECT_IS_TOP_LEVEL)
+     set(CMAKE_COLOR_DIAGNOSTICS ON)
+ endif()
++
++option(TRACY_BUILD_PROFILER "Build the graphical profiler" OFF)
++option(TRACY_BUILD_TOOLS "Build the command-line tools" OFF)
++
++if(TRACY_BUILD_PROFILER OR TRACY_BUILD_TOOLS)
++    enable_language(C)
++    set(CMAKE_CXX_STANDARD 20)
++    include(cmake/config.cmake)
++    set(VENDOR_GUI ${TRACY_BUILD_PROFILER})
++    include(cmake/vendor.cmake)
++
++    if(TRACY_BUILD_PROFILER)
++        add_subdirectory(profiler)
++    endif()
++    if(TRACY_BUILD_TOOLS)
++        foreach(tool capture csvexport import update merge)
++            add_subdirectory(${tool})
++        endforeach()
++    endif()
++endif()
+--- a/cmake/server.cmake
++++ b/cmake/server.cmake
+@@ -1,3 +1,14 @@
++# The statistics option changes both Worker behavior and its class layout.
++# Share compiled code only among tools using the same configuration.
++if(NO_STATISTICS)
++    set(TRACY_SERVER_TARGET TracyServerNoStatistics)
++else()
++    set(TRACY_SERVER_TARGET TracyServer)
++endif()
++if(TARGET ${TRACY_SERVER_TARGET})
++    return()
++endif()
++
+ set(TRACY_COMMON_DIR ${CMAKE_CURRENT_LIST_DIR}/../public/common)
+ 
+ set(TRACY_COMMON_SOURCES
+@@ -28,9 +39,18 @@
+ list(TRANSFORM TRACY_SERVER_SOURCES PREPEND "${TRACY_SERVER_DIR}/")
+ 
+ 
+-add_library(TracyServer STATIC EXCLUDE_FROM_ALL ${TRACY_COMMON_SOURCES} ${TRACY_SERVER_SOURCES})
+-target_include_directories(TracyServer PUBLIC ${TRACY_COMMON_DIR} ${TRACY_SERVER_DIR})
+-target_link_libraries(TracyServer PUBLIC TracyCapstone libzstd PPQSort::PPQSort)
++find_package(Threads REQUIRED)
++
++# The common transport/compression sources do not depend on NO_STATISTICS.
++if(NOT TARGET TracyCommon)
++    add_library(TracyCommon STATIC EXCLUDE_FROM_ALL ${TRACY_COMMON_SOURCES})
++    target_include_directories(TracyCommon PUBLIC ${TRACY_COMMON_DIR})
++    target_link_libraries(TracyCommon PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
++endif()
++
++add_library(${TRACY_SERVER_TARGET} STATIC EXCLUDE_FROM_ALL ${TRACY_SERVER_SOURCES})
++target_include_directories(${TRACY_SERVER_TARGET} PUBLIC ${TRACY_COMMON_DIR} ${TRACY_SERVER_DIR})
++target_link_libraries(${TRACY_SERVER_TARGET} PUBLIC TracyCommon TracyCapstone libzstd PPQSort::PPQSort)
+ if(NO_STATISTICS)
+-    target_compile_definitions(TracyServer PUBLIC TRACY_NO_STATISTICS)
++    target_compile_definitions(${TRACY_SERVER_TARGET} PUBLIC TRACY_NO_STATISTICS)
+ endif()
+--- a/profiler/CMakeLists.txt
++++ b/profiler/CMakeLists.txt
+@@ -297,7 +297,7 @@
+ 
+ find_package(Threads REQUIRED)
+ target_link_libraries(${PROJECT_NAME} PRIVATE
+-    TracyServer
++    ${TRACY_SERVER_TARGET}
+     TracyImGui
+     Threads::Threads
+     nlohmann_json::nlohmann_json
+--- a/capture/CMakeLists.txt
++++ b/capture/CMakeLists.txt
+@@ -24,13 +24,13 @@
+ 
+ add_executable(${PROJECT_NAME} ${PROGRAM_FILES} ${COMMON_FILES} ${SERVER_FILES})
+ add_git_ref(${PROJECT_NAME})
+-target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyGetOpt)
++target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+ set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+ 
+ install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+ 
+ add_executable(tracy-capture-daemon src/capturedaemon.cpp src/CaptureOutput.cpp ${COMMON_FILES} ${SERVER_FILES})
+ add_git_ref(tracy-capture-daemon)
+-target_link_libraries(tracy-capture-daemon PRIVATE TracyServer TracyGetOpt)
++target_link_libraries(tracy-capture-daemon PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+ 
+-install(TARGETS tracy-capture-daemon DESTINATION ${CMAKE_INSTALL_BINDIR})
+\ No newline at end of file
++install(TARGETS tracy-capture-daemon DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/csvexport/CMakeLists.txt
++++ b/csvexport/CMakeLists.txt
+@@ -23,7 +23,7 @@
+ 
+ add_executable(${PROJECT_NAME} ${PROGRAM_FILES} ${COMMON_FILES} ${SERVER_FILES})
+ add_git_ref(${PROJECT_NAME})
+-target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyGetOpt)
++target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+ set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+ 
+-install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+\ No newline at end of file
++install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/import/CMakeLists.txt
++++ b/import/CMakeLists.txt
+@@ -21,12 +21,14 @@
+     src/import-chrome.cpp
+ )
+ add_git_ref(tracy-import-chrome)
+-target_link_libraries(tracy-import-chrome PRIVATE TracyServer nlohmann_json::nlohmann_json)
++target_link_libraries(tracy-import-chrome PRIVATE ${TRACY_SERVER_TARGET} nlohmann_json::nlohmann_json)
+ 
+ add_executable(tracy-import-fuchsia
+     src/import-fuchsia.cpp
+ )
+ add_git_ref(tracy-import-fuchsia)
+-target_link_libraries(tracy-import-fuchsia PRIVATE TracyServer)
++target_link_libraries(tracy-import-fuchsia PRIVATE ${TRACY_SERVER_TARGET})
+ 
+ set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
++
++install(TARGETS tracy-import-chrome tracy-import-fuchsia DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/update/CMakeLists.txt
++++ b/update/CMakeLists.txt
+@@ -26,7 +26,7 @@
+ 
+ add_executable(${PROJECT_NAME} ${PROGRAM_FILES} ${COMMON_FILES} ${SERVER_FILES})
+ add_git_ref(${PROJECT_NAME})
+-target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyGetOpt)
++target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+ set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+ 
+ install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/merge/CMakeLists.txt
++++ b/merge/CMakeLists.txt
+@@ -19,7 +19,7 @@
+ 
+ add_executable(${PROJECT_NAME} src/merge.cpp)
+ add_git_ref(${PROJECT_NAME})
+-target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyGetOpt)
++target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+ set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+ 
+ install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/cmake/GitRef.cmake
++++ b/cmake/GitRef.cmake
+@@ -1,4 +1,13 @@
+ function(add_git_ref target)
++    if(DEFINED TRACY_GIT_REF)
++        # Release archives have no .git directory. Generate a header in each
++        # component's binary directory when building several tools together.
++        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/GitRef.hpp"
++            "#pragma once\nnamespace tracy { static inline const char* GitRef = \"${TRACY_GIT_REF}\"; }\n")
++        target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
++        return()
++    endif()
++
+     if(NOT DEFINED GIT_REV)
+         set(GIT_REV "HEAD")
+     endif()

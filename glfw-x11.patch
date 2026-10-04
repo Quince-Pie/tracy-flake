@@ -1,0 +1,17 @@
+The legacy backend passes X11 window handles to the file dialog,
+so GLFW must not choose Wayland when both platforms are available.
+
+--- a/profiler/src/BackendGlfw.cpp
++++ b/profiler/src/BackendGlfw.cpp
+@@ -124,6 +124,11 @@
+ Backend::Backend( const char* title, const std::function<void()>& redraw, const std::function<void(float)>& scaleChanged, const std::function<int(void)>& isBusy, RunQueue* mainThreadTasks )
+ {
+     glfwSetErrorCallback( glfw_error_callback );
++#ifdef __linux__
++    // This backend uses X11 native handles, including in the file selector.
++    // GLFW may otherwise select Wayland when both platforms are available.
++    glfwInitHint( GLFW_PLATFORM, GLFW_PLATFORM_X11 );
++#endif
+     if( !glfwInit() ) exit( 1 );
+ #ifdef DISPLAY_SERVER_WAYLAND
+     glfwWindowHint( GLFW_ALPHA_BITS, 0 );
