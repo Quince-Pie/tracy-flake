@@ -4,7 +4,7 @@ Release archives have no .git directory, so take the version reference as an opt
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -323,3 +323,23 @@
+@@ -332,3 +332,26 @@
  if(PROJECT_IS_TOP_LEVEL)
      set(CMAKE_COLOR_DIAGNOSTICS ON)
  endif()
@@ -26,8 +26,20 @@ Release archives have no .git directory, so take the version reference as an opt
 +        foreach(tool capture csvexport import update merge)
 +            add_subdirectory(${tool})
 +        endforeach()
++        if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|aarch64|arm64)$")
++            add_subdirectory(monitor)
++        endif()
 +    endif()
 +endif()
+--- a/cmake/config.cmake
++++ b/cmake/config.cmake
+@@ -79,6 +79,4 @@
+     endif()
+ endif()
+ 
+-file(GENERATE OUTPUT .gitignore CONTENT "*")
+-
+ set(CMAKE_COLOR_DIAGNOSTICS ON)
 --- a/cmake/server.cmake
 +++ b/cmake/server.cmake
 @@ -1,3 +1,14 @@
@@ -45,7 +57,7 @@ Release archives have no .git directory, so take the version reference as an opt
  set(TRACY_COMMON_DIR ${CMAKE_CURRENT_LIST_DIR}/../public/common)
  
  set(TRACY_COMMON_SOURCES
-@@ -28,9 +39,18 @@
+@@ -29,9 +40,18 @@
  list(TRANSFORM TRACY_SERVER_SOURCES PREPEND "${TRACY_SERVER_DIR}/")
  
  
@@ -68,9 +80,26 @@ Release archives have no .git directory, so take the version reference as an opt
 -    target_compile_definitions(TracyServer PUBLIC TRACY_NO_STATISTICS)
 +    target_compile_definitions(${TRACY_SERVER_TARGET} PUBLIC TRACY_NO_STATISTICS)
  endif()
+--- a/cmake/util.cmake
++++ b/cmake/util.cmake
+@@ -1,3 +1,7 @@
++if(TARGET TracyUtil)
++    return()
++endif()
++
+ set(TRACY_UTIL_DIR ${CMAKE_CURRENT_LIST_DIR}/../util)
+ 
+ set(TRACY_UTIL_SOURCES
+@@ -9,5 +13,5 @@
+ list(TRANSFORM TRACY_UTIL_SOURCES PREPEND "${TRACY_UTIL_DIR}/")
+ 
+ add_library(TracyUtil STATIC EXCLUDE_FROM_ALL ${TRACY_UTIL_SOURCES})
+-target_link_libraries(TracyUtil PUBLIC TracyServer)
++target_link_libraries(TracyUtil PUBLIC ${TRACY_SERVER_TARGET})
+ target_include_directories(TracyUtil PUBLIC ${TRACY_UTIL_DIR})
 --- a/profiler/CMakeLists.txt
 +++ b/profiler/CMakeLists.txt
-@@ -297,7 +297,7 @@
+@@ -357,7 +357,7 @@
  
  find_package(Threads REQUIRED)
  target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -83,18 +112,18 @@ Release archives have no .git directory, so take the version reference as an opt
 +++ b/capture/CMakeLists.txt
 @@ -24,13 +24,13 @@
  
- add_executable(${PROJECT_NAME} ${PROGRAM_FILES} ${COMMON_FILES} ${SERVER_FILES})
+ add_executable(${PROJECT_NAME} ${PROGRAM_FILES})
  add_git_ref(${PROJECT_NAME})
--target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyGetOpt)
-+target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+-target_link_libraries(${PROJECT_NAME} PRIVATE TracyServer TracyUtil TracyGetOpt)
++target_link_libraries(${PROJECT_NAME} PRIVATE ${TRACY_SERVER_TARGET} TracyUtil TracyGetOpt)
  set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
  
  install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
  
- add_executable(tracy-capture-daemon src/capturedaemon.cpp src/CaptureOutput.cpp ${COMMON_FILES} ${SERVER_FILES})
+ add_executable(tracy-capture-daemon src/capturedaemon.cpp)
  add_git_ref(tracy-capture-daemon)
--target_link_libraries(tracy-capture-daemon PRIVATE TracyServer TracyGetOpt)
-+target_link_libraries(tracy-capture-daemon PRIVATE ${TRACY_SERVER_TARGET} TracyGetOpt)
+-target_link_libraries(tracy-capture-daemon PRIVATE TracyServer TracyUtil TracyGetOpt)
++target_link_libraries(tracy-capture-daemon PRIVATE ${TRACY_SERVER_TARGET} TracyUtil TracyGetOpt)
  
 -install(TARGETS tracy-capture-daemon DESTINATION ${CMAKE_INSTALL_BINDIR})
 \ No newline at end of file
@@ -153,6 +182,17 @@ Release archives have no .git directory, so take the version reference as an opt
  set_property(DIRECTORY ${CMAKE_CURRENT_LIST_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
  
  install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
+--- a/monitor/CMakeLists.txt
++++ b/monitor/CMakeLists.txt
+@@ -47,7 +47,7 @@
+     target_compile_definitions(${PROJECT_NAME} PRIVATE TRACY_ON_DEMAND)
+ endif()
+ target_link_libraries(${PROJECT_NAME} PRIVATE
+-    TracyServer
++    ${TRACY_SERVER_TARGET}
+     TracyUtil
+     Threads::Threads
+     ${CMAKE_DL_LIBS}
 --- a/cmake/GitRef.cmake
 +++ b/cmake/GitRef.cmake
 @@ -1,4 +1,13 @@

@@ -6,13 +6,12 @@
   outputs =
     { self, nixpkgs }:
     let
-      inherit (nixpkgs) lib;
       # Nixpkgs 26.05 deprecates x86_64-darwin; the overlay still serves it.
-      forAllSystems = lib.genAttrs [
-        "x86_64-linux"
-        "aarch64-linux"
-        "aarch64-darwin"
-      ];
+      forAllSystems = f: {
+        x86_64-linux = f nixpkgs.legacyPackages.x86_64-linux;
+        aarch64-linux = f nixpkgs.legacyPackages.aarch64-linux;
+        aarch64-darwin = f nixpkgs.legacyPackages.aarch64-darwin;
+      };
     in
     {
       overlays.default = final: _prev: {
@@ -20,10 +19,10 @@
       };
 
       packages = forAllSystems (
-        system:
+        pkgs:
         let
           # Shared with consumers that follow this nixpkgs, unlike a private import.
-          tracy = nixpkgs.legacyPackages.${system}.callPackage ./package.nix { };
+          tracy = pkgs.callPackage ./package.nix { };
         in
         {
           default = tracy;
@@ -34,18 +33,28 @@
       );
 
       checks = forAllSystems (
-        system:
+        pkgs:
         let
+          inherit (pkgs.stdenv.hostPlatform) system;
           packages = removeAttrs self.packages.${system} [ "default" ];
+          testChecks = builtins.listToAttrs (
+            builtins.concatMap (
+              name:
+              let
+                inherit (packages.${name}) tests;
+              in
+              map (test: {
+                name = "${name}-tests-${test}";
+                value = tests.${test};
+              }) (builtins.attrNames tests)
+            ) (builtins.attrNames packages)
+          );
         in
         packages
-        // lib.concatMapAttrs (
-          name: package: lib.mapAttrs' (test: lib.nameValuePair "${name}-tests-${test}") package.tests
-        ) packages
+        // testChecks
         // {
           formatting =
-            nixpkgs.legacyPackages.${system}.runCommandLocal "tracy-formatting"
-              { nativeBuildInputs = [ self.formatter.${system} ]; }
+            pkgs.runCommandLocal "tracy-formatting" { nativeBuildInputs = [ self.formatter.${system} ]; }
               ''
                 cp -R --no-preserve=mode ${self} source
                 treefmt --ci --working-dir source
@@ -55,8 +64,8 @@
       );
 
       formatter = forAllSystems (
-        system:
-        nixpkgs.legacyPackages.${system}.nixfmt-tree.override {
+        pkgs:
+        pkgs.nixfmt-tree.override {
           # Outside a repository, treefmt would otherwise walk the store.
           settings.tree-root-file = "flake.nix";
         }

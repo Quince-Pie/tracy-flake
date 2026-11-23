@@ -6,6 +6,9 @@
   pkg-config,
   tracy,
 }:
+let
+  expectEnable = if tracy.enableProfiling or true then "1" else "0";
+in
 stdenv.mkDerivation {
   pname = "tracy-client-test";
   inherit (tracy) version;
@@ -18,14 +21,17 @@ stdenv.mkDerivation {
     pkg-config
   ];
   buildInputs = [ tracy ];
-  cmakeFlags = [ (lib.cmakeFeature "EXPECTED_TRACY_VERSION" tracy.version) ];
+  cmakeFlags = [
+    "-DEXPECTED_TRACY_VERSION:STRING=${tracy.version}"
+    "-DEXPECTED_TRACY_ENABLE:STRING=${expectEnable}"
+  ];
   postBuild = ''
     $PKG_CONFIG --exact-version=${tracy.version} tracy
-    $CXX -std=c++11 $($PKG_CONFIG --cflags tracy) ../main.cpp \
-      -o tracy-pkgconfig-consumer $($PKG_CONFIG --libs --static tracy)
+    eval "$CXX -std=c++11 -DEXPECTED_TRACY_ENABLE=${expectEnable} $($PKG_CONFIG --cflags tracy) ../main.cpp \
+      -o tracy-pkgconfig-consumer $($PKG_CONFIG --libs --static tracy)"
     for tracyCStandard in c11 c23; do
-      $CC -std=$tracyCStandard $($PKG_CONFIG --cflags tracy) ../main.c \
-        -o tracy-$tracyCStandard-consumer $($PKG_CONFIG --libs --static tracy)
+      eval "$CC -std=$tracyCStandard -DEXPECTED_TRACY_ENABLE=${expectEnable} $($PKG_CONFIG --cflags tracy) ../main.c \
+        -o tracy-$tracyCStandard-consumer $($PKG_CONFIG --libs --static tracy)"
     done
   '';
   doCheck = true;

@@ -1,9 +1,30 @@
-Install a tracy.pc matching the exported CMake target.
-Upstream generates one only from its Meson build.
+Install a tracy.pc matching the exported CMake target, and propagate
+optional client library dependencies consistently across CMake and pkg-config.
+Upstream generates tracy.pc only from its Meson build.
 
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -282,6 +282,34 @@
+@@ -90,15 +90,15 @@
+ if(TRACY_LIBUNWIND_BACKTRACE)
+     include(FindPkgConfig)
+     pkg_check_modules(unwind REQUIRED libunwind)
+-    target_include_directories(TracyClient INTERFACE ${unwind_INCLUDE_DIRS})
+-    target_link_libraries(TracyClient INTERFACE ${unwind_LINK_LIBRARIES})
++    target_include_directories(TracyClient PUBLIC ${unwind_INCLUDE_DIRS})
++    target_link_libraries(TracyClient PUBLIC ${unwind_LINK_LIBRARIES})
+ endif()
+ 
+ if(TRACY_DEBUGINFOD)
+     include(FindPkgConfig)
+     pkg_check_modules(debuginfod REQUIRED libdebuginfod)
+-    target_include_directories(TracyClient INTERFACE ${debuginfod_INCLUDE_DIRS})
+-    target_link_libraries(TracyClient INTERFACE ${debuginfod_LINK_LIBRARIES})
++    target_include_directories(TracyClient PUBLIC ${debuginfod_INCLUDE_DIRS})
++    target_link_libraries(TracyClient PUBLIC ${debuginfod_LINK_LIBRARIES})
+ endif()
+ 
+ add_library(Tracy::TracyClient ALIAS TracyClient)
+@@ -282,6 +282,43 @@
  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/TracyConfigVersion.cmake"
          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
  
@@ -12,6 +33,7 @@ Upstream generates one only from its Meson build.
 +set(tracy_pc_cflags "")
 +if(tracy_pc_definitions)
 +    foreach(definition IN LISTS tracy_pc_definitions)
++        string(REPLACE "\"" "\\\"" definition "${definition}")
 +        string(APPEND tracy_pc_cflags " -D${definition}")
 +    endforeach()
 +endif()
@@ -25,9 +47,17 @@ Upstream generates one only from its Meson build.
 +        string(APPEND tracy_pc_libs_private " -l${library}")
 +    endif()
 +endforeach()
++if(rocprofiler-sdk_FOUND AND TARGET rocprofiler-sdk::rocprofiler-sdk-shared-library)
++    get_target_property(tracy_rocprof_lib rocprofiler-sdk::rocprofiler-sdk-shared-library LOCATION)
++    if(tracy_rocprof_lib)
++        string(APPEND tracy_pc_libs_private " ${tracy_rocprof_lib}")
++    endif()
++endif()
++set(tracy_pc_requires "")
 +set(tracy_pc_requires_private "")
 +if(TRACY_LIBUNWIND_BACKTRACE)
-+    string(APPEND tracy_pc_requires_private " libunwind")
++    # TracyCallstack.hpp calls unw_backtrace inline from consumer translation units.
++    string(APPEND tracy_pc_requires " libunwind")
 +endif()
 +if(TRACY_DEBUGINFOD)
 +    string(APPEND tracy_pc_requires_private " libdebuginfod")
@@ -38,9 +68,21 @@ Upstream generates one only from its Meson build.
  option(TRACY_CLIENT_PYTHON "Whether to build Tracy python client library" OFF)
  
  if(TRACY_CLIENT_PYTHON)
+--- a/Config.cmake.in
++++ b/Config.cmake.in
+@@ -5,4 +5,7 @@
+ include(CMakeFindDependencyMacro)
+ find_dependency(Threads REQUIRED)
++if("@rocprofiler-sdk_FOUND@")
++    find_dependency(rocprofiler-sdk REQUIRED)
++endif()
+ 
+-include("${CMAKE_CURRENT_LIST_DIR}/TracyTargets.cmake")
+\ No newline at end of file
++include("${CMAKE_CURRENT_LIST_DIR}/TracyTargets.cmake")
 --- /dev/null
 +++ b/cmake/tracy.pc.in
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,11 @@
 +libdir=@CMAKE_INSTALL_FULL_LIBDIR@
 +includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
 +
@@ -49,5 +91,6 @@ Upstream generates one only from its Meson build.
 +Version: @PROJECT_VERSION@
 +Libs: -L${libdir} -lTracyClient
 +Libs.private: @tracy_pc_libs_private@
++Requires: @tracy_pc_requires@
 +Requires.private: @tracy_pc_requires_private@
 +Cflags: -I${includedir}/tracy@tracy_pc_cflags@

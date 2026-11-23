@@ -5,8 +5,8 @@
   capstone = fetchFromGitHub {
     owner = "capstone-engine";
     repo = "capstone";
-    tag = "6.0.0-Alpha10";
-    hash = "sha256-b+QPfS/EhTulAZSvBNw5LTcnM2Wo/Fk8xXYxoeu6S80=";
+    tag = "6.0.0-Alpha11";
+    hash = "sha256-ShiRgCDhzJB3/t/jeiWWa1IQgj254S7/8MGXjD+TUiM=";
   };
   PPQSort = fetchFromGitHub {
     owner = "GabTux";
@@ -17,20 +17,20 @@
   ImGui = fetchFromGitHub {
     owner = "ocornut";
     repo = "imgui";
-    tag = "v1.92.9b-docking";
-    hash = "sha256-PknWLxYuXQ73TCFN+eKOJDNLGbg/ZqKSF6mFxkJG6vI=";
+    tag = "v1.93.0-docking";
+    hash = "sha256-NCD0li4ECPSFhhU0egSWMiYNBKSJDoB80rSOUiRAQ6c=";
   };
   nfd = fetchFromGitHub {
     owner = "btzy";
     repo = "nativefiledialog-extended";
-    rev = "3cd252a8f7ca32419b1ca235c2990ba6a0ecba7c";
-    hash = "sha256-IdqpQtjz2Ke/MIoVvpMSDh/tz10V+Ui4BndLjqNAy3w=";
+    tag = "v1.4.1";
+    hash = "sha256-9OcVjlOhTtZfrSdSee9aA/k+0i0JlMkjLVwspUK1KxY=";
   };
   md4c = fetchFromGitHub {
     owner = "mity";
     repo = "md4c";
-    rev = "65c6c9d72cebd9a731aaa5597414ce04d9ea5de3";
-    hash = "sha256-UMIebye8pQkiTjhbz3btTqPapzoqOnPHrtbPitc717A=";
+    rev = "60e8065cfccd5d7ac561115f9a9bfbdf811f5cc9";
+    hash = "sha256-rYZQlk25Gken1Ba2m0l50UEXEdQKIZ93Bb8L2FV4tzU=";
   };
   base64 = fetchFromGitHub {
     owner = "aklomp";
@@ -41,8 +41,8 @@
   usearch = fetchFromGitHub {
     owner = "unum-cloud";
     repo = "usearch";
-    tag = "v2.26.0";
+    tag = "v2.26.4";
     # Tracy uses the header-only target, without NumKong or StringZilla.
-    hash = "sha256-D4dze+/p4wiDH2yPxdZe9evc/Grdk3aqelPbxccdJoE=";
+    hash = "sha256-6WMtfSH5FYRYfM2wQ1XudK5h0CDZmikQOJ+91cF0d3M=";
   };
 }

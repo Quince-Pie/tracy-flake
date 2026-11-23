@@ -5,8 +5,10 @@
 #include <cstdio>
 #include <thread>
 
-#ifndef TRACY_ENABLE
+#if EXPECTED_TRACY_ENABLE && !defined(TRACY_ENABLE)
 #error The installed CMake target must propagate TRACY_ENABLE to consumers
+#elif !EXPECTED_TRACY_ENABLE && defined(TRACY_ENABLE)
+#error The installed CMake target must not define TRACY_ENABLE when disabled
 #endif
 
 int main(int argc, char**)
@@ -18,6 +20,7 @@ int main(int argc, char**)
         return 0;
     }
 
+#ifdef TRACY_ENABLE
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     while (!TracyIsConnected)
     {
@@ -31,6 +34,7 @@ int main(int argc, char**)
 
 #ifdef TRACY_FIBERS
     TracyFiberEnter("nix-fiber");
+#endif
 #endif
     for (int i = 0; i < 8; ++i)
     {
@@ -46,7 +50,7 @@ int main(int argc, char**)
         FrameMark;
     }
     TracyMessageL("nix-capture-complete");
-#ifdef TRACY_FIBERS
+#if defined(TRACY_ENABLE) && defined(TRACY_FIBERS)
     TracyFiberLeave;
 #endif
     return 0;
